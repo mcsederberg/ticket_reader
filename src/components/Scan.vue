@@ -1,10 +1,10 @@
 <template>
-  <div v-if="scannedTicket">
+  <div id="scannerWrapper" :style="{ 'background-color': backgroundColor }" v-if="scannedTicket">
     <p>{{ scannedTicket.name }}</p>
     <!-- <img :src="scannedTicket.qr" /> -->
     {{ scannedTicket.scanned ? 'Escaneado' : 'No escaneado' }}
   </div>
-  <div id="qr-code-full-region"></div>
+  <div v-show="!scannedTicket" id="qr-code-full-region"></div>
 </template>
 
 <script>
@@ -48,28 +48,55 @@ export default {
 
     const scannedTicket = vueref(null);
 
-    const onScanSuccess = (decodedText, decodedResult) => {
+    const backgroundColor = vueref('white');
+
+    const onScanSuccess = async (decodedText, decodedResult) => {
       console.log(`Scan result: ${decodedText}`);
       console.log(decodedResult);
+      console.time("Scan result");
+      await reloadTickets();
+      console.timeEnd("Scan result");
 
       const ticket = tickets.value.find(ticket => ticket.uuid === decodedText);
       if (ticket) {
-        console.log("Ticket found");
-        ticket.scanned = true;
         scannedTicket.value = ticket;
+        console.log("Ticket found");
+        if (ticket.scanned) {
+          alert("El boleto ya fue escaneado!");
+          backgroundColor.value = 'red';
+          // after 2 seconds, reset the scanned ticket
+          setTimeout(() => {
+            scannedTicket.value = null;
+            backgroundColor.value = 'white';
+          }, 2000);
+          return;
+        }
+        // after 2 seconds, reset the scanned ticket
+        setTimeout(() => {
+          scannedTicket.value = null;
+          backgroundColor.value = 'white';
+        }, 2000);
+        backgroundColor.value = 'green';
+        ticket.scanned = true;
         update(ref(db, `tickets/${ticket.key}`), {
           scanned: true,
         });
+
+
       } else {
         console.log("Ticket not found");
       }
     };
 
-    onMounted(async () => {
+    const reloadTickets = async () => {
       console.log("Starting to get tickets");
       let rawTickets = await fetchAllTickets();
       tickets.value = Object.values(rawTickets);
       console.log(tickets.value);
+    }
+
+    onMounted(async () => {
+      reloadTickets();
 
       const config = {
         fps: 10,
@@ -82,6 +109,7 @@ export default {
     return {
       tickets,
       scannedTicket,
+      backgroundColor,
     }
   },
 }
